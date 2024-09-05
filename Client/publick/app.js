@@ -71,6 +71,9 @@ function stopVideo() {
     const videoCanvas = document.getElementById('videoCanvas');
     const context = videoCanvas.getContext('2d');
     context.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+
+    // Скидання активного фільтру
+    filter = null;
 }
 
 // Функція для створення PeerConnection
@@ -192,8 +195,8 @@ async function main() {
     document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
     document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
     document.getElementById('snapshotBtn').addEventListener('click', () => {
-        if (isVideoPlaying) {
-            const dataURL = canvas.toDataURL('image/png');
+        if (videoStarted) {
+            const dataURL = document.getElementById('videoCanvas').toDataURL('image/png');
             const link = document.createElement('a');
             link.href = dataURL;
             link.download = 'snapshot.png';
