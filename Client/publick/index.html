@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прямий ефір з фільтрами</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="videoBlock">
+        <canvas id="videoCanvas" width="500" height="500"></canvas>
+        <div class="videoEngineblock">
+            <button id="startBtn">Запустити відео</button>
+            <button id="stopBtn">Зупинити відео</button>
+        </div>
+    </div>
+        <div class="controls">
+            <button id="redFilterBtn">Червоний фільтр</button>
+            <button id="yellowFilterBtn">Жовтий фільтр</button>
+            <button id="greenFilterBtn">Зелений фільтр</button>
+            <button id="blueFilterBtn">Блакитний фільтр</button>
+            <button id="blurFilterBtn">Розмиття</button>
+            <button id="snapshotBtn">Зберегти знімок</button>
+        </div>
+    </div>
+    <script type="module" src="app.js"></script>
+</body>
+</html>
