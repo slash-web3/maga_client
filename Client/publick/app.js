@@ -3,7 +3,8 @@ import init, {
     apply_yellow_filter, 
     apply_green_filter, 
     apply_blue_filter, 
-    apply_blur_filter 
+    apply_blur_filter,
+    save_canvas_snapshot  
 } from '../pkg/video_filters.js';
 
 // Параметри WebRTC
@@ -14,7 +15,6 @@ let localStream;
 let peerConnection;
 let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
-let isRemoteStream = false;
 let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
 
 // Функція для налаштування відео
@@ -34,10 +34,13 @@ async function startVideo() {
             videoCanvas.height = video.videoHeight;
             drawFrame();
         };
-        
+
         function drawFrame() {
             if (videoStarted) {
                 context.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+                if (filter) {
+                    applyFilter(filter); // Застосування фільтра до кожного кадру
+                }
                 requestAnimationFrame(drawFrame);
             }
         }
@@ -63,6 +66,11 @@ function stopVideo() {
         peerConnection.close();
         peerConnection = null;
     }
+
+    // Очистити canvas
+    const videoCanvas = document.getElementById('videoCanvas');
+    const context = videoCanvas.getContext('2d');
+    context.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
 }
 
 // Функція для створення PeerConnection
@@ -88,8 +96,6 @@ function createPeerConnection() {
                 requestAnimationFrame(drawRemoteFrame);
             }
         }
-
-        isRemoteStream = true; // Вмикаємо відображення отриманого відео
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -149,6 +155,7 @@ function setupWebSocket() {
 
 // Функція для застосування фільтрів
 function applyFilter(filter) {
+    const videoCanvas = document.getElementById('videoCanvas');
     switch (filter) {
         case 'red':
             apply_red_filter('videoCanvas');
@@ -165,6 +172,10 @@ function applyFilter(filter) {
         case 'blur':
             apply_blur_filter('videoCanvas');
             break;
+        case 'snapshot':
+            save_canvas_snapshot('videoCanvas');
+            filter = null; // Скидання фільтру після знімка
+            break;
         default:
             break;
     }
@@ -180,6 +191,15 @@ async function main() {
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
     document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
     document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
+    document.getElementById('snapshotBtn').addEventListener('click', () => {
+        if (isVideoPlaying) {
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'snapshot.png';
+            link.click();
+        }
+    });
 
     document.getElementById('startBtn').addEventListener('click', startVideo);
     document.getElementById('stopBtn').addEventListener('click', stopVideo);
