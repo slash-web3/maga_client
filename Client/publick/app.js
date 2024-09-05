@@ -6,71 +6,80 @@ import init, {
     apply_blur_filter 
 } from '../pkg/video_filters.js';
 
-// Підключення до WebSocket сервера
+// Параметри WebRTC
+const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+// Змінні для WebRTC
+let localStream;
+let peerConnection;
 let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
 let isRemoteStream = false;
-let remoteVideoBlob = null;
 
-const frameRate = 15;
-const frameInterval = 1000 / frameRate;
-let lastFrameTime = 0;
-
-async function main() {
-    await init();
-
-    const canvas = document.getElementById('videoCanvas');
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-
-    function draw(timestamp) {
-        if (timestamp - lastFrameTime >= frameInterval) {
-            lastFrameTime = timestamp;
-
-            if (isRemoteStream && remoteVideoBlob) {
-                const remoteVideo = new Image();
-                remoteVideo.src = URL.createObjectURL(remoteVideoBlob);
-                remoteVideo.onload = () => {
-                    context.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
-                    applyFilter(filter);
-                    URL.revokeObjectURL(remoteVideo.src); // Очищуємо пам'ять
-                };
-            }
-        }
-        requestAnimationFrame(draw);
+// Функція для налаштування відео
+async function startVideo() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('videoCanvas').srcObject = localStream;
+        createPeerConnection();
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    } catch (error) {
+        console.error('Error accessing media devices.', error);
     }
+}
 
-    function applyFilter(filter) {
-        switch (filter) {
-            case 'red':
-                apply_red_filter('videoCanvas');
-                break;
-            case 'yellow':
-                apply_yellow_filter('videoCanvas');
-                break;
-            case 'green':
-                apply_green_filter('videoCanvas');
-                break;
-            case 'blue':
-                apply_blue_filter('videoCanvas');
-                break;
-            case 'blur':
-                apply_blur_filter('videoCanvas');
-                break;
-            default:
-                break;
+// Функція для створення PeerConnection
+function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(servers);
+
+    peerConnection.ontrack = (event) => {
+        const remoteVideo = document.getElementById('videoCanvas');
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+        }
+        isRemoteStream = true; // Вмикаємо відображення отриманого відео
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+        }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+        if (peerConnection.iceConnectionState === 'disconnected') {
+            console.log('ICE connection disconnected.');
+            // Можливо, потрібно знову підключитися
+        }
+    };
+}
+
+// Функція для обробки сигналів через WebSocket
+async function handleSignalMessage(message) {
+    const data = JSON.parse(message);
+
+    if (data.type === 'offer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        ws.send(JSON.stringify({ type: 'answer', answer }));
+    } else if (data.type === 'answer') {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    } else if (data.type === 'candidate') {
+        if (data.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
         }
     }
+}
 
-    // Фільтри
-    document.getElementById('redFilterBtn').addEventListener('click', () => filter = 'red');
-    document.getElementById('yellowFilterBtn').addEventListener('click', () => filter = 'yellow');
-    document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
-    document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
-    document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
-
-    // Підключення до WebSocket сервера
+// Налаштування WebSocket
+function setupWebSocket() {
     ws.addEventListener('open', () => {
         console.log('WebSocket connection established.');
+    });
+
+    ws.addEventListener('message', (event) => {
+        handleSignalMessage(event.data);
     });
 
     ws.addEventListener('error', (error) => {
@@ -81,16 +90,49 @@ async function main() {
         console.log('WebSocket connection closed. Attempting to reconnect...');
         setTimeout(() => {
             ws = new WebSocket('wss://maga-server.onrender.com');
+            setupWebSocket(); // Перепідключаємо WebSocket
         }, 5000);
     });
+}
 
-    // Обробка отриманих відео-кадрів
-    ws.addEventListener('message', (event) => {
-        remoteVideoBlob = new Blob([event.data]); // Отримуємо Blob з даних
-        isRemoteStream = true; // Вмикаємо відображення отриманого відео
-    });
+// Функція для застосування фільтрів
+function applyFilter(filter) {
+    switch (filter) {
+        case 'red':
+            apply_red_filter('videoCanvas');
+            break;
+        case 'yellow':
+            apply_yellow_filter('videoCanvas');
+            break;
+        case 'green':
+            apply_green_filter('videoCanvas');
+            break;
+        case 'blue':
+            apply_blue_filter('videoCanvas');
+            break;
+        case 'blur':
+            apply_blur_filter('videoCanvas');
+            break;
+        default:
+            break;
+    }
+}
 
-    requestAnimationFrame(draw);
+// Основна функція
+async function main() {
+    await init();
+
+    // Обробка фільтрів
+    document.getElementById('redFilterBtn').addEventListener('click', () => filter = 'red');
+    document.getElementById('yellowFilterBtn').addEventListener('click', () => filter = 'yellow');
+    document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
+    document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
+    document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
+
+    setupWebSocket();
+
+    // Старт відео при завантаженні сторінки
+    startVideo();
 }
 
 main();
