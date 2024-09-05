@@ -24,7 +24,24 @@ async function startVideo() {
 
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        document.getElementById('videoCanvas').srcObject = localStream;
+        const videoCanvas = document.getElementById('videoCanvas');
+        const context = videoCanvas.getContext('2d');
+        const video = document.createElement('video');
+        video.srcObject = localStream;
+        video.autoplay = true;
+        video.onloadedmetadata = () => {
+            videoCanvas.width = video.videoWidth;
+            videoCanvas.height = video.videoHeight;
+            drawFrame();
+        };
+        
+        function drawFrame() {
+            if (videoStarted) {
+                context.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+                requestAnimationFrame(drawFrame);
+            }
+        }
+
         createPeerConnection();
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     } catch (error) {
@@ -39,7 +56,7 @@ function stopVideo() {
 
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
-        document.getElementById('videoCanvas').srcObject = null;
+        localStream = null;
     }
 
     if (peerConnection) {
@@ -53,10 +70,25 @@ function createPeerConnection() {
     peerConnection = new RTCPeerConnection(servers);
 
     peerConnection.ontrack = (event) => {
-        const remoteVideo = document.getElementById('videoCanvas');
-        if (remoteVideo.srcObject !== event.streams[0]) {
-            remoteVideo.srcObject = event.streams[0];
+        const remoteStream = event.streams[0];
+        const videoCanvas = document.getElementById('videoCanvas');
+        const context = videoCanvas.getContext('2d');
+        const remoteVideo = document.createElement('video');
+        remoteVideo.srcObject = remoteStream;
+        remoteVideo.autoplay = true;
+        remoteVideo.onloadedmetadata = () => {
+            videoCanvas.width = remoteVideo.videoWidth;
+            videoCanvas.height = remoteVideo.videoHeight;
+            drawRemoteFrame();
+        };
+
+        function drawRemoteFrame() {
+            if (remoteStream.active) {
+                context.drawImage(remoteVideo, 0, 0, videoCanvas.width, videoCanvas.height);
+                requestAnimationFrame(drawRemoteFrame);
+            }
         }
+
         isRemoteStream = true; // Вмикаємо відображення отриманого відео
     };
 
