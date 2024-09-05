@@ -15,9 +15,13 @@ let peerConnection;
 let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
 let isRemoteStream = false;
+let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
 
 // Функція для налаштування відео
 async function startVideo() {
+    if (videoStarted) return; // Якщо відео вже запущено, не запускати знову
+    videoStarted = true;
+
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true });
         document.getElementById('videoCanvas').srcObject = localStream;
@@ -25,6 +29,22 @@ async function startVideo() {
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
     } catch (error) {
         console.error('Error accessing media devices.', error);
+    }
+}
+
+// Функція для зупинки відео
+function stopVideo() {
+    if (!videoStarted) return; // Якщо відео не запущено, нічого не робити
+    videoStarted = false;
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        document.getElementById('videoCanvas').srcObject = null;
+    }
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
     }
 }
 
@@ -129,10 +149,10 @@ async function main() {
     document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
     document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
 
-    setupWebSocket();
+    document.getElementById('startBtn').addEventListener('click', startVideo);
+    document.getElementById('stopBtn').addEventListener('click', stopVideo);
 
-    // Старт відео при завантаженні сторінки
-    startVideo();
+    setupWebSocket();
 }
 
 main();
