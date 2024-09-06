@@ -7,19 +7,16 @@ import init, {
     save_canvas_snapshot  
 } from '../pkg/video_filters.js';
 
-// Параметри WebRTC
 const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-// Змінні для WebRTC
 let localStream;
 let peerConnection;
 let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
-let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
+let videoStarted = false;
 
-// Функція для налаштування відео
 async function startVideo() {
-    if (videoStarted) return; // Якщо відео вже запущено, не запускати знову
+    if (videoStarted) return; 
     videoStarted = true;
 
     try {
@@ -39,7 +36,7 @@ async function startVideo() {
             if (videoStarted) {
                 context.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
                 if (filter) {
-                    applyFilter(filter); // Застосування фільтра до кожного кадру
+                    applyFilter(filter);
                 }
                 requestAnimationFrame(drawFrame);
             }
@@ -47,14 +44,14 @@ async function startVideo() {
 
         createPeerConnection();
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
     } catch (error) {
         console.error('Error accessing media devices.', error);
     }
 }
 
-// Функція для зупинки відео
 function stopVideo() {
-    if (!videoStarted) return; // Якщо відео не запущено, нічого не робити
+    if (!videoStarted) return;
     videoStarted = false;
 
     if (localStream) {
@@ -67,16 +64,13 @@ function stopVideo() {
         peerConnection = null;
     }
 
-    // Очистити canvas
     const videoCanvas = document.getElementById('videoCanvas');
     const context = videoCanvas.getContext('2d');
     context.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
 
-    // Скидання активного фільтру
     filter = null;
 }
 
-// Функція для створення PeerConnection
 function createPeerConnection() {
     peerConnection = new RTCPeerConnection(servers);
 
@@ -110,33 +104,44 @@ function createPeerConnection() {
     peerConnection.oniceconnectionstatechange = () => {
         if (peerConnection.iceConnectionState === 'disconnected') {
             console.log('ICE connection disconnected.');
-            // Можливо, потрібно знову підключитися
         }
     };
 }
 
-// Функція для обробки сигналів через WebSocket
 async function handleSignalMessage(message) {
     const data = JSON.parse(message);
 
     if (data.type === 'offer') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: 'answer', answer }));
+        if (!peerConnection) createPeerConnection(); // Створюємо з'єднання, якщо його ще немає
+        try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: 'answer', answer }));
+        } catch (error) {
+            console.error('Error handling offer:', error);
+        }
     } else if (data.type === 'answer') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        } catch (error) {
+            console.error('Error handling answer:', error);
+        }
     } else if (data.type === 'candidate') {
         if (data.candidate) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } catch (error) {
+                console.error('Error adding ICE candidate:', error);
+            }
         }
     }
 }
 
-// Налаштування WebSocket
 function setupWebSocket() {
     ws.addEventListener('open', () => {
         console.log('WebSocket connection established.');
+        createOffer();
     });
 
     ws.addEventListener('message', (event) => {
@@ -156,39 +161,20 @@ function setupWebSocket() {
     });
 }
 
-// Функція для застосування фільтрів
-function applyFilter(filter) {
-    const videoCanvas = document.getElementById('videoCanvas');
-    switch (filter) {
-        case 'red':
-            apply_red_filter('videoCanvas');
-            break;
-        case 'yellow':
-            apply_yellow_filter('videoCanvas');
-            break;
-        case 'green':
-            apply_green_filter('videoCanvas');
-            break;
-        case 'blue':
-            apply_blue_filter('videoCanvas');
-            break;
-        case 'blur':
-            apply_blur_filter('videoCanvas');
-            break;
-        case 'snapshot':
-            save_canvas_snapshot('videoCanvas');
-            filter = null; // Скидання фільтру після знімка
-            break;
-        default:
-            break;
+async function createOffer() {
+    if (!peerConnection) createPeerConnection(); // Створюємо з'єднання
+    try {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: 'offer', offer }));
+    } catch (error) {
+        console.error('Error creating offer:', error);
     }
 }
 
-// Основна функція
 async function main() {
     await init();
 
-    // Обробка фільтрів
     document.getElementById('redFilterBtn').addEventListener('click', () => filter = 'red');
     document.getElementById('yellowFilterBtn').addEventListener('click', () => filter = 'yellow');
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
