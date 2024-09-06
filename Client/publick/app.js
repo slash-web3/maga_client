@@ -11,32 +11,14 @@ import init, {
 const servers = {
     iceServers: [
         { url: 'stun:stun.l.google.com:19302' },
-        { url: 'stun:stun01.sipphone.com' },
-        { url: 'stun:stun.ekiga.net' },
-        { url: 'stun:stun.fwdnet.net' },
-        { url: 'stun:stun.ideasip.com' },
-        { url: 'stun:stun.iptel.org' },
-        { url: 'stun:stun.rixtelecom.se' },
-        { url: 'stun:stun.schlund.de' },
-        { url: 'stun:stun.l.google.com:19302' },
-        { url: 'stun:stun1.l.google.com:19302' },
-        { url: 'stun:stun2.l.google.com:19302' },
-        { url: 'stun:stun3.l.google.com:19302' },
-        { url: 'stun:stun4.l.google.com:19302' },
-        { url: 'stun:stunserver.org' },
-        { url: 'stun:stun.softjoys.com' },
-        { url: 'stun:stun.voiparound.com' },
-        { url: 'stun:stun.voipbuster.com' },
-        { url: 'stun:stun.voipstunt.com' },
-        { url: 'stun:stun.voxgratia.org' },
-        { url: 'stun:stun.xten.com' }
+        // Додаткові STUN/TURN сервери тут
     ]
 };
 
 // Налаштування PubNub
 const pubnub = new PubNub({
-    publishKey: 'pub-c-12940b5f-0236-4a15-842e-97b74b1ea4de', // Заміни на свій публічний ключ
-    subscribeKey: 'sub-c-d4f3857c-0a4c-41bb-ac1b-ab46625d6dd7', // Заміни на свій підписний ключ
+    publishKey: 'pub-c-12940b5f-0236-4a15-842e-97b74b1ea4de', // Ваш публічний ключ
+    subscribeKey: 'sub-c-d4f3857c-0a4c-41bb-ac1b-ab46625d6dd7', // Ваш підписний ключ
     uuid: 'user-' + Math.random().toString(36).substr(2, 9)
 });
 
@@ -45,11 +27,11 @@ let localStream;
 let peerConnection;
 let remoteStream;
 let filter = null;
-let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
+let videoStarted = false;
 
 // Функція для налаштування відео
 async function startVideo() {
-    if (videoStarted) return; // Якщо відео вже запущено, не запускати знову
+    if (videoStarted) return; 
     videoStarted = true;
 
     try {
@@ -69,7 +51,7 @@ async function startVideo() {
             if (videoStarted) {
                 context.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
                 if (filter) {
-                    applyFilter(filter); // Застосування фільтра до кожного кадру
+                    applyFilter(filter);
                 }
                 requestAnimationFrame(drawFrame);
             }
@@ -84,7 +66,7 @@ async function startVideo() {
 
 // Функція для зупинки відео
 function stopVideo() {
-    if (!videoStarted) return; // Якщо відео не запущено, нічого не робити
+    if (!videoStarted) return;
     videoStarted = false;
 
     if (localStream) {
@@ -97,12 +79,10 @@ function stopVideo() {
         peerConnection = null;
     }
 
-    // Очистити canvas
     const videoCanvas = document.getElementById('videoCanvas');
     const context = videoCanvas.getContext('2d');
     context.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
 
-    // Скидання активного фільтру
     filter = null;
 }
 
@@ -143,7 +123,6 @@ function createPeerConnection() {
     peerConnection.oniceconnectionstatechange = () => {
         if (peerConnection.iceConnectionState === 'disconnected') {
             console.log('ICE connection disconnected.');
-            // Можливо, потрібно знову підключитися
         }
     };
 }
@@ -213,7 +192,7 @@ function applyFilter(filter) {
             break;
         case 'snapshot':
             save_canvas_snapshot('videoCanvas');
-            filter = null; // Скидання фільтру після знімка
+            filter = null; 
             break;
         default:
             break;
@@ -224,7 +203,6 @@ function applyFilter(filter) {
 async function main() {
     await init();
 
-    // Обробка фільтрів
     document.getElementById('redFilterBtn').addEventListener('click', () => filter = 'red');
     document.getElementById('yellowFilterBtn').addEventListener('click', () => filter = 'yellow');
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
