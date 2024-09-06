@@ -78,6 +78,9 @@ function stopVideo() {
 
 // Функція для створення PeerConnection
 function createPeerConnection() {
+    if (peerConnection) {
+        peerConnection.close();
+    }
     peerConnection = new RTCPeerConnection(servers);
 
     peerConnection.ontrack = (event) => {
@@ -158,36 +161,29 @@ function setupWebSocket() {
 
 // Функція для застосування фільтрів
 function applyFilter(filter) {
-    const videoCanvas = document.getElementById('videoCanvas');
-    const context = videoCanvas.getContext('2d');
-    const imageData = context.getImageData(0, 0, videoCanvas.width, videoCanvas.height);
-
     switch (filter) {
         case 'red':
-            apply_red_filter(imageData.data, videoCanvas.width, videoCanvas.height);
+            apply_red_filter('videoCanvas');
             break;
         case 'yellow':
-            apply_yellow_filter(imageData.data, videoCanvas.width, videoCanvas.height);
+            apply_yellow_filter('videoCanvas');
             break;
         case 'green':
-            apply_green_filter(imageData.data, videoCanvas.width, videoCanvas.height);
+            apply_green_filter('videoCanvas');
             break;
         case 'blue':
-            apply_blue_filter(imageData.data, videoCanvas.width, videoCanvas.height);
+            apply_blue_filter('videoCanvas');
             break;
         case 'blur':
-            apply_blur_filter(imageData.data, videoCanvas.width, videoCanvas.height);
+            apply_blur_filter('videoCanvas');
             break;
         case 'snapshot':
-            save_canvas_snapshot(videoCanvas);
+            save_canvas_snapshot('videoCanvas');
             filter = null; // Скидання фільтру після знімка
             break;
         default:
             break;
     }
-
-    // Малюємо оброблене зображення назад на canvas
-    context.putImageData(imageData, 0, 0);
 }
 
 // Основна функція
@@ -200,20 +196,12 @@ async function main() {
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
     document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
     document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
-    document.getElementById('snapshotBtn').addEventListener('click', () => {
-        if (videoStarted) {
-            const dataURL = document.getElementById('videoCanvas').toDataURL('image/png');
-            const link = document.createElement('a');
-            link.href = dataURL;
-            link.download = 'snapshot.png';
-            link.click();
-        }
-    });
+    document.getElementById('snapshotBtn').addEventListener('click', () => filter = 'snapshot');
 
-    document.getElementById('startBtn').addEventListener('click', startVideo);
-    document.getElementById('stopBtn').addEventListener('click', stopVideo);
+    document.getElementById('startVideoBtn').addEventListener('click', startVideo);
+    document.getElementById('stopVideoBtn').addEventListener('click', stopVideo);
 
     setupWebSocket();
 }
 
-main();
+main().catch(console.error);
