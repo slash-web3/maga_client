@@ -13,6 +13,7 @@ const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 // Змінні для WebRTC
 let localStream;
 let peerConnection;
+let remoteStream;
 let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
 let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
@@ -78,16 +79,13 @@ function stopVideo() {
 
 // Функція для створення PeerConnection
 function createPeerConnection() {
-    if (peerConnection) {
-        peerConnection.close();
-    }
     peerConnection = new RTCPeerConnection(servers);
 
     peerConnection.ontrack = (event) => {
-        const remoteStream = event.streams[0];
         const videoCanvas = document.getElementById('videoCanvas');
         const context = videoCanvas.getContext('2d');
         const remoteVideo = document.createElement('video');
+        remoteStream = event.streams[0];
         remoteVideo.srcObject = remoteStream;
         remoteVideo.autoplay = true;
         remoteVideo.onloadedmetadata = () => {
@@ -161,6 +159,7 @@ function setupWebSocket() {
 
 // Функція для застосування фільтрів
 function applyFilter(filter) {
+    const videoCanvas = document.getElementById('videoCanvas');
     switch (filter) {
         case 'red':
             apply_red_filter('videoCanvas');
@@ -196,12 +195,20 @@ async function main() {
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
     document.getElementById('blueFilterBtn').addEventListener('click', () => filter = 'blue');
     document.getElementById('blurFilterBtn').addEventListener('click', () => filter = 'blur');
-    document.getElementById('snapshotBtn').addEventListener('click', () => filter = 'snapshot');
+    document.getElementById('snapshotBtn').addEventListener('click', () => {
+        if (videoStarted) {
+            const dataURL = document.getElementById('videoCanvas').toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'snapshot.png';
+            link.click();
+        }
+    });
 
-    document.getElementById('startVideoBtn').addEventListener('click', startVideo);
-    document.getElementById('stopVideoBtn').addEventListener('click', stopVideo);
+    document.getElementById('startBtn').addEventListener('click', startVideo);
+    document.getElementById('stopBtn').addEventListener('click', stopVideo);
 
     setupWebSocket();
 }
 
-main().catch(console.error);
+main();
