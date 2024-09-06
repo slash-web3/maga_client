@@ -8,30 +8,18 @@ import init, {
 } from '../pkg/video_filters.js';
 
 // Параметри WebRTC
-const servers = {
-    iceServers: [
-        { url: 'stun:stun.l.google.com:19302' },
-        // Додаткові STUN/TURN сервери тут
-    ]
-};
-
-// Налаштування PubNub
-const pubnub = new PubNub({
-    publishKey: 'pub-c-12940b5f-0236-4a15-842e-97b74b1ea4de', // Ваш публічний ключ
-    subscribeKey: 'sub-c-d4f3857c-0a4c-41bb-ac1b-ab46625d6dd7', // Ваш підписний ключ
-    uuid: 'user-' + Math.random().toString(36).substr(2, 9)
-});
+const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 // Змінні для WebRTC
 let localStream;
 let peerConnection;
-let remoteStream;
+let ws = new WebSocket('wss://maga-server.onrender.com');
 let filter = null;
-let videoStarted = false;
+let videoStarted = false; // Додана змінна для перевірки, чи запущено відео
 
 // Функція для налаштування відео
 async function startVideo() {
-    if (videoStarted) return; 
+    if (videoStarted) return; // Якщо відео вже запущено, не запускати знову
     videoStarted = true;
 
     try {
@@ -51,7 +39,7 @@ async function startVideo() {
             if (videoStarted) {
                 context.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
                 if (filter) {
-                    applyFilter(filter);
+                    applyFilter(filter); // Застосування фільтра до кожного кадру
                 }
                 requestAnimationFrame(drawFrame);
             }
@@ -66,7 +54,7 @@ async function startVideo() {
 
 // Функція для зупинки відео
 function stopVideo() {
-    if (!videoStarted) return;
+    if (!videoStarted) return; // Якщо відео не запущено, нічого не робити
     videoStarted = false;
 
     if (localStream) {
@@ -79,10 +67,12 @@ function stopVideo() {
         peerConnection = null;
     }
 
+    // Очистити canvas
     const videoCanvas = document.getElementById('videoCanvas');
     const context = videoCanvas.getContext('2d');
     context.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
 
+    // Скидання активного фільтру
     filter = null;
 }
 
@@ -91,10 +81,10 @@ function createPeerConnection() {
     peerConnection = new RTCPeerConnection(servers);
 
     peerConnection.ontrack = (event) => {
+        const remoteStream = event.streams[0];
         const videoCanvas = document.getElementById('videoCanvas');
         const context = videoCanvas.getContext('2d');
         const remoteVideo = document.createElement('video');
-        remoteStream = event.streams[0];
         remoteVideo.srcObject = remoteStream;
         remoteVideo.autoplay = true;
         remoteVideo.onloadedmetadata = () => {
@@ -113,32 +103,27 @@ function createPeerConnection() {
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-            pubnub.publish({
-                channel: 'webrtc-channel',
-                message: { type: 'candidate', candidate: event.candidate }
-            });
+            ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
         }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
         if (peerConnection.iceConnectionState === 'disconnected') {
             console.log('ICE connection disconnected.');
+            // Можливо, потрібно знову підключитися
         }
     };
 }
 
-// Функція для обробки сигналів через PubNub
+// Функція для обробки сигналів через WebSocket
 async function handleSignalMessage(message) {
-    const data = message.message;
+    const data = JSON.parse(message);
 
     if (data.type === 'offer') {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        pubnub.publish({
-            channel: 'webrtc-channel',
-            message: { type: 'answer', answer }
-        });
+        ws.send(JSON.stringify({ type: 'answer', answer }));
     } else if (data.type === 'answer') {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
     } else if (data.type === 'candidate') {
@@ -148,26 +133,26 @@ async function handleSignalMessage(message) {
     }
 }
 
-// Налаштування PubNub
-function setupPubNub() {
-    pubnub.subscribe({
-        channels: ['webrtc-channel']
+// Налаштування WebSocket
+function setupWebSocket() {
+    ws.addEventListener('open', () => {
+        console.log('WebSocket connection established.');
     });
 
-    pubnub.addListener({
-        message: (event) => {
-            handleSignalMessage(event);
-        },
-        status: (statusEvent) => {
-            if (statusEvent.category === "PNConnectedCategory") {
-                console.log('PubNub connection established.');
-            } else if (statusEvent.category === "PNDisconnectedCategory") {
-                console.log('PubNub connection closed.');
-            }
-        },
-        error: (error) => {
-            console.error('PubNub error:', error);
-        }
+    ws.addEventListener('message', (event) => {
+        handleSignalMessage(event.data);
+    });
+
+    ws.addEventListener('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+
+    ws.addEventListener('close', () => {
+        console.log('WebSocket connection closed. Attempting to reconnect...');
+        setTimeout(() => {
+            ws = new WebSocket('wss://maga-server.onrender.com');
+            setupWebSocket(); // Перепідключаємо WebSocket
+        }, 5000);
     });
 }
 
@@ -192,7 +177,7 @@ function applyFilter(filter) {
             break;
         case 'snapshot':
             save_canvas_snapshot('videoCanvas');
-            filter = null; 
+            filter = null; // Скидання фільтру після знімка
             break;
         default:
             break;
@@ -203,6 +188,7 @@ function applyFilter(filter) {
 async function main() {
     await init();
 
+    // Обробка фільтрів
     document.getElementById('redFilterBtn').addEventListener('click', () => filter = 'red');
     document.getElementById('yellowFilterBtn').addEventListener('click', () => filter = 'yellow');
     document.getElementById('greenFilterBtn').addEventListener('click', () => filter = 'green');
@@ -221,7 +207,7 @@ async function main() {
     document.getElementById('startBtn').addEventListener('click', startVideo);
     document.getElementById('stopBtn').addEventListener('click', stopVideo);
 
-    setupPubNub();
+    setupWebSocket();
 }
 
 main();
